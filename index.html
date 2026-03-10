@@ -132,12 +132,39 @@
             color: var(--tg-theme-hint-color, #999);
         }
         
-        .count {
+        .error {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background: #ffeeee;
+            border-radius: 12px;
+            margin: 20px;
+        }
+        
+        .retry-button {
             background: var(--tg-theme-button-color, #40a7e3);
             color: white;
-            padding: 2px 8px;
-            border-radius: 20px;
-            font-size: 14px;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: var(--tg-theme-button-color, #40a7e3);
+            border-radius: 4px;
         }
         
         .filter-buttons {
@@ -161,25 +188,14 @@
             background: var(--tg-theme-button-color, #40a7e3);
             color: white;
         }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 4px;
-            margin-top: 8px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: var(--tg-theme-button-color, #40a7e3);
-            border-radius: 4px;
-        }
     </style>
 </head>
 <body>
-    <div id="loading" class="loading">Загрузка данных...</div>
+    <div id="loading" class="loading">Загрузка данных из музея...</div>
+    <div id="error" class="hidden">
+        <div class="error" id="error-message"></div>
+        <button class="retry-button" onclick="requestDataFromBot()">Повторить</button>
+    </div>
     
     <div id="main-menu" class="hidden">
         <div class="header">
@@ -234,6 +250,7 @@
             <div class="filter-button" onclick="filterEvents('lecture')">📚 Лекции</div>
             <div class="filter-button" onclick="filterEvents('masterclass')">🎨 Мастер-классы</div>
             <div class="filter-button" onclick="filterEvents('concert')">🎵 Концерты</div>
+            <div class="filter-button" onclick="filterEvents('special')">✨ Спец. события</div>
         </div>
         <div class="section" id="events-list"></div>
     </div>
@@ -251,82 +268,71 @@
         tg.expand();
         tg.setHeaderColor('secondary_bg_color');
         
-        // Данные по умолчанию
-        let museumData = {
-            name: 'Государственный музей искусств',
-            address: 'г. Москва, ул. Тверская, 15',
-            workHours: '10:00 - 20:00',
-            phone: '+7 (495) 123-45-67',
-            priceInfo: '500 руб.',
-            description: 'Крупнейший музей искусства',
-            mainImage: null,
-            gallery: []
-        };
-        
+        let museumData = {};
         let exhibitions = [];
         let events = [];
         let filteredExhibitions = [];
         let filteredEvents = [];
         
-        // Получаем данные из URL параметров
-        function getDataFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const dataParam = urlParams.get('data');
+        // Инициализация - запрашиваем данные у бота
+        function requestDataFromBot() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('main-menu').classList.add('hidden');
             
-            if (dataParam) {
-                try {
-                    const decodedData = atob(dataParam);
-                    const data = JSON.parse(decodedData);
-                    
-                    if (data.museum) museumData = data.museum;
-                    if (data.exhibitions) exhibitions = data.exhibitions;
-                    if (data.events) events = data.events;
-                    
-                    console.log('Данные загружены из URL:', data);
-                } catch (e) {
-                    console.error('Ошибка загрузки данных:', e);
-                    loadDefaultData();
+            // Отправляем запрос боту
+            tg.sendData(JSON.stringify({
+                action: 'get_museum_data'
+            }));
+            
+            // Устанавливаем таймаут на случай, если бот не ответит
+            setTimeout(function() {
+                if (!window.dataReceived) {
+                    showError('Бот не ответил. Убедитесь, что бот запущен и нажмите "Повторить"');
                 }
-            } else {
-                loadDefaultData();
-            }
-            
-            // Скрываем загрузку, показываем меню
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('main-menu').classList.remove('hidden');
-            
-            // Обновляем отображение
-            document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
-            loadFeaturedEvents();
+            }, 5000);
         }
         
-        // Загрузка данных по умолчанию (если нет данных из бота)
-        function loadDefaultData() {
-            exhibitions = [
-                {
-                    name: 'Основная экспозиция',
-                    description: 'Постоянная экспозиция музея',
-                    type: 'permanent',
-                    halls: ['Зал 1', 'Зал 2']
-                },
-                {
-                    name: 'Современное искусство',
-                    description: 'Выставка современных художников',
-                    type: 'temporary',
-                    dates: '01.03 - 30.05.2024',
-                    curator: 'Анна Иванова'
+        // Эта функция будет вызвана, когда бот отправит данные
+        window.dataReceived = false;
+        
+        // Слушаем сообщения от бота
+        tg.onEvent('message', function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.success) {
+                    museumData = data.museum;
+                    exhibitions = data.exhibitions;
+                    events = data.events;
+                    
+                    filteredExhibitions = exhibitions;
+                    filteredEvents = events;
+                    
+                    window.dataReceived = true;
+                    
+                    // Обновляем интерфейс
+                    document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
+                    
+                    // Скрываем загрузку, показываем меню
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('main-menu').classList.remove('hidden');
+                    
+                    // Загружаем рекомендуемые события
+                    loadFeaturedEvents();
+                    
+                    console.log('Данные получены от бота:', data);
+                } else {
+                    showError('Ошибка получения данных от бота');
                 }
-            ];
-            
-            events = [
-                {
-                    name: 'Обзорная экскурсия',
-                    description: 'Знакомство с музеем',
-                    date: 'Завтра',
-                    time: '15:00',
-                    price: '300 руб.'
-                }
-            ];
+            } catch (e) {
+                console.error('Ошибка парсинга данных:', e);
+            }
+        });
+        
+        function showError(message) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
         }
         
         function showMainMenu() {
@@ -343,11 +349,9 @@
                     loadMuseumInfo();
                     break;
                 case 'exhibitions':
-                    filteredExhibitions = exhibitions;
                     loadExhibitions();
                     break;
                 case 'events':
-                    filteredEvents = events;
                     loadEvents();
                     break;
                 case 'contacts':
@@ -387,7 +391,7 @@
         
         function filterExhibitions(type) {
             // Обновляем активную кнопку
-            document.querySelectorAll('.filter-button').forEach(btn => {
+            document.querySelectorAll('#exhibitions-section .filter-button').forEach(btn => {
                 btn.classList.remove('active');
             });
             event.target.classList.add('active');
@@ -415,13 +419,12 @@
                 const typeText = ex.type === 'permanent' ? 'Постоянная' : 'Временная';
                 
                 html += `
-                    <div class="card" onclick="showExhibitionDetails(${ex.id})">
+                    <div class="card">
                         <div class="card-title">${typeIcon} ${ex.name}</div>
                         <span class="badge">${typeText}</span>
                         <div class="card-description">${ex.description}</div>
                         ${ex.dates ? `<div class="card-meta">📅 ${ex.dates}</div>` : ''}
                         ${ex.curator ? `<div class="card-meta">👤 Куратор: ${ex.curator}</div>` : ''}
-                        ${ex.halls ? `<div class="card-meta">🏛️ Залы: ${ex.halls.length}</div>` : ''}
                     </div>
                 `;
             });
@@ -535,9 +538,9 @@
             tg.showAlert(`✅ Вы выбрали: ${eventName}`);
         }
         
-        // Инициализация
+        // Запускаем запрос данных при загрузке
         document.addEventListener('DOMContentLoaded', function() {
-            getDataFromUrl();
+            requestDataFromBot();
             
             tg.MainButton.setText('Закрыть');
             tg.MainButton.onClick(function() {
