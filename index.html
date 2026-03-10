@@ -6,6 +6,7 @@
     <title>Музейный гид</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* Стили как в предыдущей версии */
         * {
             margin: 0;
             padding: 0;
@@ -132,6 +133,12 @@
             color: var(--tg-theme-hint-color, #999);
         }
         
+        .progress-text {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+            margin-top: 8px;
+        }
+        
         .error {
             color: red;
             text-align: center;
@@ -191,7 +198,10 @@
     </style>
 </head>
 <body>
-    <div id="loading" class="loading">Загрузка данных из музея...</div>
+    <div id="loading" class="loading">
+        Загрузка данных из музея...
+        <div class="progress-text" id="loading-progress"></div>
+    </div>
     <div id="error" class="hidden">
         <div class="error" id="error-message"></div>
         <button class="retry-button" onclick="requestDataFromBot()">Повторить</button>
@@ -274,56 +284,111 @@
         let filteredExhibitions = [];
         let filteredEvents = [];
         
+        // Переменные для сбора данных по частям
+        let expectedExhibitionsChunks = 0;
+        let receivedExhibitionsChunks = 0;
+        let expectedEventsChunks = 0;
+        let receivedEventsChunks = 0;
+        let exhibitionsBuffer = [];
+        let eventsBuffer = [];
+        
         // Инициализация - запрашиваем данные у бота
         function requestDataFromBot() {
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('error').classList.add('hidden');
             document.getElementById('main-menu').classList.add('hidden');
             
+            // Сбрасываем буферы
+            exhibitions = [];
+            events = [];
+            exhibitionsBuffer = [];
+            eventsBuffer = [];
+            receivedExhibitionsChunks = 0;
+            receivedEventsChunks = 0;
+            
             // Отправляем запрос боту
             tg.sendData(JSON.stringify({
                 action: 'get_museum_data'
             }));
             
-            // Устанавливаем таймаут на случай, если бот не ответит
+            // Устанавливаем таймаут
             setTimeout(function() {
-                if (!window.dataReceived) {
+                if (!window.dataComplete) {
                     showError('Бот не ответил. Убедитесь, что бот запущен и нажмите "Повторить"');
                 }
-            }, 5000);
+            }, 10000);
         }
         
-        // Эта функция будет вызвана, когда бот отправит данные
-        window.dataReceived = false;
+        window.dataComplete = false;
         
         // Слушаем сообщения от бота
         tg.onEvent('message', function(event) {
             try {
                 const data = JSON.parse(event.data);
-                if (data.success) {
-                    museumData = data.museum;
-                    exhibitions = data.exhibitions;
-                    events = data.events;
-                    
-                    filteredExhibitions = exhibitions;
-                    filteredEvents = events;
-                    
-                    window.dataReceived = true;
-                    
-                    // Обновляем интерфейс
-                    document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
-                    
-                    // Скрываем загрузку, показываем меню
-                    document.getElementById('loading').classList.add('hidden');
-                    document.getElementById('main-menu').classList.remove('hidden');
-                    
-                    // Загружаем рекомендуемые события
-                    loadFeaturedEvents();
-                    
-                    console.log('Данные получены от бота:', data);
-                } else {
-                    showError('Ошибка получения данных от бота');
+                
+                if (!data.success) {
+                    showError(data.error || 'Ошибка получения данных');
+                    return;
                 }
+                
+                // Обрабатываем разные типы сообщений
+                switch(data.type) {
+                    case 'museum_data':
+                        // Получили основную информацию о музее
+                        museumData = data.museum;
+                        document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
+                        
+                        // Обновляем прогресс
+                        document.getElementById('loading-progress').textContent = 
+                            `Загружено: выставки 0/${data.exhibitions_count}, мероприятия 0/${data.events_count}`;
+                        
+                        expectedExhibitionsChunks = Math.ceil(data.exhibitions_count / 5);
+                        expectedEventsChunks = Math.ceil(data.events_count / 5);
+                        break;
+                        
+                    case 'exhibitions_chunk':
+                        // Получили часть выставок
+                        exhibitionsBuffer = exhibitionsBuffer.concat(data.data);
+                        receivedExhibitionsChunks++;
+                        
+                        document.getElementById('loading-progress').textContent = 
+                            `Загружено: выставки ${exhibitionsBuffer.length}/${data.total_chunks * 5}, мероприятия ${eventsBuffer.length}/${expectedEventsChunks * 5}`;
+                        break;
+                        
+                    case 'events_chunk':
+                        // Получили часть мероприятий
+                        eventsBuffer = eventsBuffer.concat(data.data);
+                        receivedEventsChunks++;
+                        
+                        document.getElementById('loading-progress').textContent = 
+                            `Загружено: выставки ${exhibitionsBuffer.length}/${expectedExhibitionsChunks * 5}, мероприятия ${eventsBuffer.length}/${expectedEventsChunks * 5}`;
+                        break;
+                        
+                    case 'data_complete':
+                        // Все данные получены
+                        exhibitions = exhibitionsBuffer;
+                        events = eventsBuffer;
+                        
+                        filteredExhibitions = exhibitions;
+                        filteredEvents = events;
+                        
+                        window.dataComplete = true;
+                        
+                        // Скрываем загрузку, показываем меню
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('main-menu').classList.remove('hidden');
+                        
+                        // Загружаем рекомендуемые события
+                        loadFeaturedEvents();
+                        
+                        console.log('Все данные получены:', {
+                            museum: museumData,
+                            exhibitions: exhibitions.length,
+                            events: events.length
+                        });
+                        break;
+                }
+                
             } catch (e) {
                 console.error('Ошибка парсинга данных:', e);
             }
@@ -467,10 +532,6 @@
                 };
                 const icon = typeIcons[ev.type] || '📌';
                 
-                // Процент заполненных мест
-                const percent = ev.max_participants ? (ev.current / ev.max_participants * 100) : 0;
-                const free = ev.max_participants ? ev.max_participants - ev.current : '∞';
-                
                 html += `
                     <div class="card" onclick="bookEvent('${ev.name}')">
                         <div class="card-title">${icon} ${ev.name}</div>
@@ -480,14 +541,6 @@
                             <span>💰 ${ev.price}</span>
                         </div>
                         <div class="card-meta">📍 ${ev.location}</div>
-                        <div class="card-meta">
-                            <span>👥 Свободно: ${free}</span>
-                        </div>
-                        ${ev.max_participants ? `
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: ${percent}%"></div>
-                            </div>
-                        ` : ''}
                     </div>
                 `;
             });
