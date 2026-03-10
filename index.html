@@ -6,7 +6,6 @@
     <title>Музейный гид</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Стили как в предыдущей версии */
         * {
             margin: 0;
             padding: 0;
@@ -42,9 +41,6 @@
             font-weight: bold;
             margin-bottom: 12px;
             color: var(--tg-theme-text-color, #000000);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
         
         .card {
@@ -133,47 +129,6 @@
             color: var(--tg-theme-hint-color, #999);
         }
         
-        .progress-text {
-            font-size: 14px;
-            color: var(--tg-theme-hint-color, #999);
-            margin-top: 8px;
-        }
-        
-        .error {
-            color: red;
-            text-align: center;
-            padding: 20px;
-            background: #ffeeee;
-            border-radius: 12px;
-            margin: 20px;
-        }
-        
-        .retry-button {
-            background: var(--tg-theme-button-color, #40a7e3);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 16px;
-            margin-top: 20px;
-            cursor: pointer;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 4px;
-            margin-top: 8px;
-            overflow: hidden;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: var(--tg-theme-button-color, #40a7e3);
-            border-radius: 4px;
-        }
-        
         .filter-buttons {
             display: flex;
             gap: 8px;
@@ -195,6 +150,12 @@
             background: var(--tg-theme-button-color, #40a7e3);
             color: white;
         }
+        
+        .progress-text {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+            margin-top: 8px;
+        }
     </style>
 </head>
 <body>
@@ -202,15 +163,10 @@
         Загрузка данных из музея...
         <div class="progress-text" id="loading-progress"></div>
     </div>
-    <div id="error" class="hidden">
-        <div class="error" id="error-message"></div>
-        <button class="retry-button" onclick="requestDataFromBot()">Повторить</button>
-    </div>
     
     <div id="main-menu" class="hidden">
         <div class="header">
             <h1 id="museum-name">🏛️ Музей искусств</h1>
-            <p id="museum-short"></p>
         </div>
         
         <div class="menu-grid">
@@ -221,26 +177,20 @@
         </div>
         
         <div class="section">
-            <div class="section-title">
-                <span>🌟 Рекомендуем сегодня</span>
-            </div>
+            <div class="section-title">🌟 Рекомендуем сегодня</div>
             <div id="featured-events"></div>
         </div>
     </div>
     
     <div id="museum-section" class="hidden">
         <div class="back-button" onclick="showMainMenu()">← Назад</div>
-        <div class="header">
-            <h1>О музее</h1>
-        </div>
+        <div class="header"><h1>О музее</h1></div>
         <div class="section" id="museum-info"></div>
     </div>
     
     <div id="exhibitions-section" class="hidden">
         <div class="back-button" onclick="showMainMenu()">← Назад</div>
-        <div class="header">
-            <h1>Выставки</h1>
-        </div>
+        <div class="header"><h1>Выставки</h1></div>
         <div class="filter-buttons">
             <div class="filter-button active" onclick="filterExhibitions('all')">Все</div>
             <div class="filter-button" onclick="filterExhibitions('permanent')">Постоянные</div>
@@ -251,32 +201,25 @@
     
     <div id="events-section" class="hidden">
         <div class="back-button" onclick="showMainMenu()">← Назад</div>
-        <div class="header">
-            <h1>Мероприятия</h1>
-        </div>
+        <div class="header"><h1>Мероприятия</h1></div>
         <div class="filter-buttons">
             <div class="filter-button active" onclick="filterEvents('all')">Все</div>
             <div class="filter-button" onclick="filterEvents('excursion')">🚶 Экскурсии</div>
             <div class="filter-button" onclick="filterEvents('lecture')">📚 Лекции</div>
             <div class="filter-button" onclick="filterEvents('masterclass')">🎨 Мастер-классы</div>
-            <div class="filter-button" onclick="filterEvents('concert')">🎵 Концерты</div>
-            <div class="filter-button" onclick="filterEvents('special')">✨ Спец. события</div>
         </div>
         <div class="section" id="events-list"></div>
     </div>
     
     <div id="contacts-section" class="hidden">
         <div class="back-button" onclick="showMainMenu()">← Назад</div>
-        <div class="header">
-            <h1>Контакты</h1>
-        </div>
+        <div class="header"><h1>Контакты</h1></div>
         <div class="section" id="contacts-info"></div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.setHeaderColor('secondary_bg_color');
         
         let museumData = {};
         let exhibitions = [];
@@ -284,7 +227,6 @@
         let filteredExhibitions = [];
         let filteredEvents = [];
         
-        // Переменные для сбора данных по частям
         let expectedExhibitionsChunks = 0;
         let receivedExhibitionsChunks = 0;
         let expectedEventsChunks = 0;
@@ -292,112 +234,69 @@
         let exhibitionsBuffer = [];
         let eventsBuffer = [];
         
-        // Инициализация - запрашиваем данные у бота
         function requestDataFromBot() {
             document.getElementById('loading').classList.remove('hidden');
-            document.getElementById('error').classList.add('hidden');
             document.getElementById('main-menu').classList.add('hidden');
             
-            // Сбрасываем буферы
-            exhibitions = [];
-            events = [];
             exhibitionsBuffer = [];
             eventsBuffer = [];
             receivedExhibitionsChunks = 0;
             receivedEventsChunks = 0;
             
-            // Отправляем запрос боту
             tg.sendData(JSON.stringify({
                 action: 'get_museum_data'
             }));
-            
-            // Устанавливаем таймаут
-            setTimeout(function() {
-                if (!window.dataComplete) {
-                    showError('Бот не ответил. Убедитесь, что бот запущен и нажмите "Повторить"');
-                }
-            }, 10000);
         }
         
-        window.dataComplete = false;
-        
-        // Слушаем сообщения от бота
         tg.onEvent('message', function(event) {
             try {
                 const data = JSON.parse(event.data);
                 
-                if (!data.success) {
-                    showError(data.error || 'Ошибка получения данных');
-                    return;
-                }
+                if (!data.success) return;
                 
-                // Обрабатываем разные типы сообщений
                 switch(data.type) {
                     case 'museum_data':
-                        // Получили основную информацию о музее
                         museumData = data.museum;
                         document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
-                        
-                        // Обновляем прогресс
-                        document.getElementById('loading-progress').textContent = 
-                            `Загружено: выставки 0/${data.exhibitions_count}, мероприятия 0/${data.events_count}`;
-                        
-                        expectedExhibitionsChunks = Math.ceil(data.exhibitions_count / 5);
-                        expectedEventsChunks = Math.ceil(data.events_count / 5);
+                        expectedExhibitionsChunks = data.exhibitions_count ? Math.ceil(data.exhibitions_count / 5) : 0;
+                        expectedEventsChunks = data.events_count ? Math.ceil(data.events_count / 5) : 0;
                         break;
                         
                     case 'exhibitions_chunk':
-                        // Получили часть выставок
                         exhibitionsBuffer = exhibitionsBuffer.concat(data.data);
                         receivedExhibitionsChunks++;
-                        
-                        document.getElementById('loading-progress').textContent = 
-                            `Загружено: выставки ${exhibitionsBuffer.length}/${data.total_chunks * 5}, мероприятия ${eventsBuffer.length}/${expectedEventsChunks * 5}`;
+                        updateProgress();
                         break;
                         
                     case 'events_chunk':
-                        // Получили часть мероприятий
                         eventsBuffer = eventsBuffer.concat(data.data);
                         receivedEventsChunks++;
-                        
-                        document.getElementById('loading-progress').textContent = 
-                            `Загружено: выставки ${exhibitionsBuffer.length}/${expectedExhibitionsChunks * 5}, мероприятия ${eventsBuffer.length}/${expectedEventsChunks * 5}`;
+                        updateProgress();
                         break;
                         
                     case 'data_complete':
-                        // Все данные получены
                         exhibitions = exhibitionsBuffer;
                         events = eventsBuffer;
-                        
                         filteredExhibitions = exhibitions;
                         filteredEvents = events;
                         
-                        window.dataComplete = true;
-                        
-                        // Скрываем загрузку, показываем меню
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('main-menu').classList.remove('hidden');
-                        
-                        // Загружаем рекомендуемые события
                         loadFeaturedEvents();
-                        
-                        console.log('Все данные получены:', {
-                            museum: museumData,
-                            exhibitions: exhibitions.length,
-                            events: events.length
-                        });
                         break;
                 }
-                
             } catch (e) {
-                console.error('Ошибка парсинга данных:', e);
+                console.error('Ошибка:', e);
             }
         });
         
-        function showError(message) {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('error').classList.remove('hidden');
-            document.getElementById('error-message').textContent = message;
+        function updateProgress() {
+            const total = expectedExhibitionsChunks + expectedEventsChunks;
+            const received = receivedExhibitionsChunks + receivedEventsChunks;
+            if (total > 0) {
+                const percent = Math.round(received / total * 100);
+                document.getElementById('loading-progress').textContent = `Загружено: ${percent}%`;
+            }
         }
         
         function showMainMenu() {
@@ -410,160 +309,115 @@
             document.getElementById(section + '-section').classList.remove('hidden');
             
             switch(section) {
-                case 'museum':
-                    loadMuseumInfo();
-                    break;
-                case 'exhibitions':
-                    loadExhibitions();
-                    break;
-                case 'events':
-                    loadEvents();
-                    break;
-                case 'contacts':
-                    loadContacts();
-                    break;
+                case 'museum': loadMuseumInfo(); break;
+                case 'exhibitions': loadExhibitions(); break;
+                case 'events': loadEvents(); break;
+                case 'contacts': loadContacts(); break;
             }
         }
         
         function hideAllSections() {
-            const sections = ['main-menu', 'museum-section', 'exhibitions-section', 'events-section', 'contacts-section'];
-            sections.forEach(id => {
-                document.getElementById(id).classList.add('hidden');
-            });
+            ['main-menu', 'museum-section', 'exhibitions-section', 'events-section', 'contacts-section']
+                .forEach(id => document.getElementById(id).classList.add('hidden'));
         }
         
         function loadMuseumInfo() {
-            const container = document.getElementById('museum-info');
-            container.innerHTML = `
+            document.getElementById('museum-info').innerHTML = `
                 <div class="card">
                     <div class="card-title">${museumData.name}</div>
                     <div class="card-description">${museumData.description || ''}</div>
-                    <div class="card-meta">
-                        <span>📍 ${museumData.address}</span>
-                    </div>
-                    <div class="card-meta">
-                        <span>🕒 ${museumData.workHours}</span>
-                    </div>
-                    <div class="card-meta">
-                        <span>📞 ${museumData.phone}</span>
-                    </div>
-                    <div class="card-meta">
-                        <span>💰 ${museumData.priceInfo}</span>
-                    </div>
+                    <div class="card-meta">📍 ${museumData.address}</div>
+                    <div class="card-meta">🕒 ${museumData.workHours}</div>
+                    <div class="card-meta">📞 ${museumData.phone}</div>
+                    <div class="card-meta">💰 ${museumData.priceInfo}</div>
                 </div>
             `;
         }
         
         function filterExhibitions(type) {
-            // Обновляем активную кнопку
-            document.querySelectorAll('#exhibitions-section .filter-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            document.querySelectorAll('#exhibitions-section .filter-button').forEach(btn => 
+                btn.classList.remove('active'));
             event.target.classList.add('active');
             
-            // Фильтруем
-            if (type === 'all') {
-                filteredExhibitions = exhibitions;
-            } else {
-                filteredExhibitions = exhibitions.filter(ex => ex.type === type);
-            }
-            
+            filteredExhibitions = type === 'all' ? exhibitions : 
+                exhibitions.filter(ex => ex.type === type);
             loadExhibitions();
         }
         
         function loadExhibitions() {
-            const container = document.getElementById('exhibitions-list');
-            if (!filteredExhibitions || filteredExhibitions.length === 0) {
-                container.innerHTML = '<div class="card">Нет выставок в этой категории</div>';
+            if (!filteredExhibitions.length) {
+                document.getElementById('exhibitions-list').innerHTML = 
+                    '<div class="card">Нет выставок</div>';
                 return;
             }
             
             let html = '';
             filteredExhibitions.forEach(ex => {
-                const typeIcon = ex.type === 'permanent' ? '🏛️' : '🖼️';
+                const icon = ex.type === 'permanent' ? '🏛️' : '🖼️';
                 const typeText = ex.type === 'permanent' ? 'Постоянная' : 'Временная';
                 
                 html += `
                     <div class="card">
-                        <div class="card-title">${typeIcon} ${ex.name}</div>
+                        <div class="card-title">${icon} ${ex.name}</div>
                         <span class="badge">${typeText}</span>
                         <div class="card-description">${ex.description}</div>
                         ${ex.dates ? `<div class="card-meta">📅 ${ex.dates}</div>` : ''}
-                        ${ex.curator ? `<div class="card-meta">👤 Куратор: ${ex.curator}</div>` : ''}
+                        ${ex.curator ? `<div class="card-meta">👤 ${ex.curator}</div>` : ''}
                     </div>
                 `;
             });
-            
-            container.innerHTML = html;
+            document.getElementById('exhibitions-list').innerHTML = html;
         }
         
         function filterEvents(type) {
-            // Обновляем активную кнопку
-            document.querySelectorAll('#events-section .filter-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
+            document.querySelectorAll('#events-section .filter-button').forEach(btn => 
+                btn.classList.remove('active'));
             event.target.classList.add('active');
             
-            // Фильтруем
-            if (type === 'all') {
-                filteredEvents = events;
-            } else {
-                filteredEvents = events.filter(ev => ev.type === type);
-            }
-            
+            filteredEvents = type === 'all' ? events : 
+                events.filter(ev => ev.type === type);
             loadEvents();
         }
         
         function loadEvents() {
-            const container = document.getElementById('events-list');
-            if (!filteredEvents || filteredEvents.length === 0) {
-                container.innerHTML = '<div class="card">Нет мероприятий в этой категории</div>';
+            if (!filteredEvents.length) {
+                document.getElementById('events-list').innerHTML = 
+                    '<div class="card">Нет мероприятий</div>';
                 return;
             }
             
+            const icons = {'excursion':'🚶','lecture':'📚','masterclass':'🎨'};
+            
             let html = '';
             filteredEvents.forEach(ev => {
-                const typeIcons = {
-                    'excursion': '🚶',
-                    'lecture': '📚',
-                    'masterclass': '🎨',
-                    'concert': '🎵',
-                    'special': '✨'
-                };
-                const icon = typeIcons[ev.type] || '📌';
-                
                 html += `
                     <div class="card" onclick="bookEvent('${ev.name}')">
-                        <div class="card-title">${icon} ${ev.name}</div>
+                        <div class="card-title">${icons[ev.type] || '📌'} ${ev.name}</div>
                         <div class="card-description">${ev.description}</div>
-                        <div class="card-meta">
-                            <span>📅 ${ev.date} ${ev.time}</span>
-                            <span>💰 ${ev.price}</span>
-                        </div>
+                        <div class="card-meta">📅 ${ev.date} ${ev.time}</div>
+                        <div class="card-meta">💰 ${ev.price}</div>
                         <div class="card-meta">📍 ${ev.location}</div>
                     </div>
                 `;
             });
-            
-            container.innerHTML = html;
+            document.getElementById('events-list').innerHTML = html;
         }
         
         function loadContacts() {
-            const container = document.getElementById('contacts-info');
-            container.innerHTML = `
+            document.getElementById('contacts-info').innerHTML = `
                 <div class="card">
-                    <div class="card-title">Контактная информация</div>
-                    <div class="card-meta">📱 Телефон: ${museumData.phone}</div>
-                    <div class="card-meta">📧 Email: info@${museumData.website || 'museum.ru'}</div>
-                    <div class="card-meta">📍 Адрес: ${museumData.address}</div>
-                    <div class="card-meta">🕒 Часы работы: ${museumData.workHours}</div>
+                    <div class="card-title">Контакты</div>
+                    <div class="card-meta">📱 ${museumData.phone}</div>
+                    <div class="card-meta">📧 info@${museumData.website}</div>
+                    <div class="card-meta">📍 ${museumData.address}</div>
+                    <div class="card-meta">🕒 ${museumData.workHours}</div>
                 </div>
             `;
         }
         
         function loadFeaturedEvents() {
             const container = document.getElementById('featured-events');
-            if (!events || events.length === 0) {
+            if (!events.length) {
                 container.innerHTML = '<div class="card">Нет мероприятий</div>';
                 return;
             }
@@ -578,7 +432,6 @@
                     </div>
                 `;
             });
-            
             container.innerHTML = html;
         }
         
@@ -587,18 +440,13 @@
                 action: 'book_ticket',
                 event: eventName
             }));
-            
             tg.showAlert(`✅ Вы выбрали: ${eventName}`);
         }
         
-        // Запускаем запрос данных при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             requestDataFromBot();
-            
             tg.MainButton.setText('Закрыть');
-            tg.MainButton.onClick(function() {
-                tg.close();
-            });
+            tg.MainButton.onClick(() => tg.close());
         });
     </script>
 </body>
