@@ -129,6 +129,12 @@
             color: var(--tg-theme-hint-color, #999);
         }
         
+        .error {
+            color: red;
+            text-align: center;
+            padding: 20px;
+        }
+        
         .filter-buttons {
             display: flex;
             gap: 8px;
@@ -151,6 +157,17 @@
             color: white;
         }
         
+        .retry-button {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        
         .progress-text {
             font-size: 14px;
             color: var(--tg-theme-hint-color, #999);
@@ -160,8 +177,13 @@
 </head>
 <body>
     <div id="loading" class="loading">
-        Загрузка данных из музея...
+        <div>🏛️ Загрузка данных из музея...</div>
         <div class="progress-text" id="loading-progress"></div>
+    </div>
+    
+    <div id="error" class="hidden">
+        <div class="error" id="error-message"></div>
+        <button class="retry-button" onclick="requestDataFromBot()">Повторить</button>
     </div>
     
     <div id="main-menu" class="hidden">
@@ -219,7 +241,13 @@
 
     <script>
         const tg = window.Telegram.WebApp;
+        
+        // Инициализация Web App
+        tg.ready();
         tg.expand();
+        
+        // Отключаем главную кнопку сначала
+        tg.MainButton.hide();
         
         let museumData = {};
         let exhibitions = [];
@@ -233,26 +261,48 @@
         let receivedEventsChunks = 0;
         let exhibitionsBuffer = [];
         let eventsBuffer = [];
+        let dataTimeout = null;
         
         function requestDataFromBot() {
+            // Показываем загрузку
             document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
             document.getElementById('main-menu').classList.add('hidden');
             
+            // Сбрасываем буферы
             exhibitionsBuffer = [];
             eventsBuffer = [];
             receivedExhibitionsChunks = 0;
             receivedEventsChunks = 0;
             
+            // Обновляем прогресс
+            document.getElementById('loading-progress').textContent = 'Отправка запроса...';
+            
+            // Отправляем запрос боту
             tg.sendData(JSON.stringify({
                 action: 'get_museum_data'
             }));
+            
+            // Устанавливаем таймаут на случай ошибки
+            if (dataTimeout) clearTimeout(dataTimeout);
+            dataTimeout = setTimeout(function() {
+                if (!window.dataComplete) {
+                    showError('Бот не отвечает. Проверьте, запущен ли бот.');
+                }
+            }, 10000);
         }
         
+        window.dataComplete = false;
+        
+        // Слушаем сообщения от бота
         tg.onEvent('message', function(event) {
             try {
                 const data = JSON.parse(event.data);
                 
-                if (!data.success) return;
+                if (!data.success) {
+                    showError('Ошибка получения данных');
+                    return;
+                }
                 
                 switch(data.type) {
                     case 'museum_data':
@@ -260,18 +310,19 @@
                         document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
                         expectedExhibitionsChunks = data.exhibitions_count ? Math.ceil(data.exhibitions_count / 5) : 0;
                         expectedEventsChunks = data.events_count ? Math.ceil(data.events_count / 5) : 0;
+                        updateProgress(0, 0);
                         break;
                         
                     case 'exhibitions_chunk':
                         exhibitionsBuffer = exhibitionsBuffer.concat(data.data);
                         receivedExhibitionsChunks++;
-                        updateProgress();
+                        updateProgress('exhibitions');
                         break;
                         
                     case 'events_chunk':
                         eventsBuffer = eventsBuffer.concat(data.data);
                         receivedEventsChunks++;
-                        updateProgress();
+                        updateProgress('events');
                         break;
                         
                     case 'data_complete':
@@ -280,23 +331,50 @@
                         filteredExhibitions = exhibitions;
                         filteredEvents = events;
                         
+                        window.dataComplete = true;
+                        if (dataTimeout) clearTimeout(dataTimeout);
+                        
+                        // Скрываем загрузку, показываем меню
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('main-menu').classList.remove('hidden');
+                        
+                        // Загружаем рекомендуемые события
                         loadFeaturedEvents();
+                        
+                        console.log('✅ Все данные загружены:', 
+                            exhibitions.length, 'выставок,', 
+                            events.length, 'мероприятий');
                         break;
                 }
             } catch (e) {
-                console.error('Ошибка:', e);
+                console.error('Ошибка парсинга данных:', e);
             }
         });
         
-        function updateProgress() {
+        function updateProgress(type) {
             const total = expectedExhibitionsChunks + expectedEventsChunks;
             const received = receivedExhibitionsChunks + receivedEventsChunks;
+            
             if (total > 0) {
                 const percent = Math.round(received / total * 100);
-                document.getElementById('loading-progress').textContent = `Загружено: ${percent}%`;
+                let text = `Загружено: ${percent}% `;
+                
+                if (expectedExhibitionsChunks > 0) {
+                    text += `\nВыставки: ${exhibitionsBuffer.length}`;
+                }
+                if (expectedEventsChunks > 0) {
+                    text += `\nМероприятия: ${eventsBuffer.length}`;
+                }
+                
+                document.getElementById('loading-progress').textContent = text;
             }
+        }
+        
+        function showError(message) {
+            if (dataTimeout) clearTimeout(dataTimeout);
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
         }
         
         function showMainMenu() {
@@ -347,7 +425,7 @@
         function loadExhibitions() {
             if (!filteredExhibitions.length) {
                 document.getElementById('exhibitions-list').innerHTML = 
-                    '<div class="card">Нет выставок</div>';
+                    '<div class="card">Нет выставок в этой категории</div>';
                 return;
             }
             
@@ -382,7 +460,7 @@
         function loadEvents() {
             if (!filteredEvents.length) {
                 document.getElementById('events-list').innerHTML = 
-                    '<div class="card">Нет мероприятий</div>';
+                    '<div class="card">Нет мероприятий в этой категории</div>';
                 return;
             }
             
@@ -408,7 +486,7 @@
                 <div class="card">
                     <div class="card-title">Контакты</div>
                     <div class="card-meta">📱 ${museumData.phone}</div>
-                    <div class="card-meta">📧 info@${museumData.website}</div>
+                    <div class="card-meta">📧 info@${museumData.website || 'museum.ru'}</div>
                     <div class="card-meta">📍 ${museumData.address}</div>
                     <div class="card-meta">🕒 ${museumData.workHours}</div>
                 </div>
@@ -443,10 +521,16 @@
             tg.showAlert(`✅ Вы выбрали: ${eventName}`);
         }
         
+        // Запускаем запрос данных при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             requestDataFromBot();
+            
+            // Настраиваем главную кнопку
             tg.MainButton.setText('Закрыть');
-            tg.MainButton.onClick(() => tg.close());
+            tg.MainButton.onClick(function() {
+                tg.close();
+            });
+            tg.MainButton.show();
         });
     </script>
 </body>
