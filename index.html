@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Музейный гид</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 16px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--tg-theme-hint-color, #ccc);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: var(--tg-theme-button-color, #40a7e3);
+        }
+        
+        .section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: var(--tg-theme-text-color, #000000);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .card:active {
+            transform: scale(0.98);
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--tg-theme-button-color, #40a7e3);
+        }
+        
+        .card-description {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #666);
+            margin-bottom: 8px;
+        }
+        
+        .card-meta {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #999);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .badge {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 16px;
+            font-size: 12px;
+            display: inline-block;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .menu-item {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            padding: 16px 8px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .menu-item:active {
+            opacity: 0.8;
+        }
+        
+        .back-button {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            color: var(--tg-theme-text-color, #000000);
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--tg-theme-hint-color, #999);
+        }
+        
+        .error {
+            color: red;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .filter-button {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        
+        .filter-button.active {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: white;
+        }
+        
+        .refresh-button {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .refresh-button:hover {
+            background: var(--tg-theme-hint-color, #ccc);
+        }
+        
+        .last-update {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #999);
+            text-align: right;
+            margin-top: 8px;
+        }
+        
+        .progress-text {
+            font-size: 14px;
+            color: var(--tg-theme-hint-color, #999);
+            margin-top: 8px;
+        }
+        
+        .retry-button {
+            background: var(--tg-theme-button-color, #40a7e3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">
+        <div>🏛️ Загрузка данных из музея...</div>
+        <div class="progress-text" id="loading-progress"></div>
+    </div>
+    
+    <div id="error" class="hidden">
+        <div class="error" id="error-message"></div>
+        <button class="retry-button" onclick="requestDataFromBot()">Повторить</button>
+    </div>
+    
+    <div id="main-menu" class="hidden">
+        <div class="header">
+            <h1 id="museum-name">🏛️ Музей искусств</h1>
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="refresh-button" onclick="refreshData()">
+                    🔄 Обновить данные
+                </button>
+            </div>
+        </div>
+        
+        <div class="menu-grid">
+            <div class="menu-item" onclick="showSection('museum')">О музее</div>
+            <div class="menu-item" onclick="showSection('exhibitions')">Выставки</div>
+            <div class="menu-item" onclick="showSection('events')">Мероприятия</div>
+            <div class="menu-item" onclick="showSection('contacts')">Контакты</div>
+        </div>
+        
+        <div class="section">
+            <div class="section-title">
+                <span>🌟 Рекомендуем сегодня</span>
+            </div>
+            <div id="featured-events"></div>
+        </div>
+        
+        <div class="last-update" id="last-update"></div>
+    </div>
+    
+    <div id="museum-section" class="hidden">
+        <div class="back-button" onclick="showMainMenu()">← Назад</div>
+        <div class="header"><h1>О музее</h1></div>
+        <div class="section" id="museum-info"></div>
+    </div>
+    
+    <div id="exhibitions-section" class="hidden">
+        <div class="back-button" onclick="showMainMenu()">← Назад</div>
+        <div class="header"><h1>Выставки</h1></div>
+        <div class="filter-buttons">
+            <div class="filter-button active" onclick="filterExhibitions('all')">Все</div>
+            <div class="filter-button" onclick="filterExhibitions('permanent')">Постоянные</div>
+            <div class="filter-button" onclick="filterExhibitions('temporary')">Временные</div>
+        </div>
+        <div class="section" id="exhibitions-list"></div>
+    </div>
+    
+    <div id="events-section" class="hidden">
+        <div class="back-button" onclick="showMainMenu()">← Назад</div>
+        <div class="header"><h1>Мероприятия</h1></div>
+        <div class="filter-buttons">
+            <div class="filter-button active" onclick="filterEvents('all')">Все</div>
+            <div class="filter-button" onclick="filterEvents('excursion')">🚶 Экскурсии</div>
+            <div class="filter-button" onclick="filterEvents('lecture')">📚 Лекции</div>
+            <div class="filter-button" onclick="filterEvents('masterclass')">🎨 Мастер-классы</div>
+            <div class="filter-button" onclick="filterEvents('special')">✨ Спец. события</div>
+        </div>
+        <div class="section" id="events-list"></div>
+    </div>
+    
+    <div id="contacts-section" class="hidden">
+        <div class="back-button" onclick="showMainMenu()">← Назад</div>
+        <div class="header"><h1>Контакты</h1></div>
+        <div class="section" id="contacts-info"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        
+        // Инициализация Web App
+        tg.ready();
+        tg.expand();
+        
+        // Отключаем главную кнопку сначала
+        tg.MainButton.hide();
+        
+        let museumData = {};
+        let exhibitions = [];
+        let events = [];
+        let filteredExhibitions = [];
+        let filteredEvents = [];
+        
+        let expectedExhibitionsChunks = 0;
+        let receivedExhibitionsChunks = 0;
+        let expectedEventsChunks = 0;
+        let receivedEventsChunks = 0;
+        let exhibitionsBuffer = [];
+        let eventsBuffer = [];
+        let dataTimeout = null;
+        
+        function requestDataFromBot() {
+            // Показываем загрузку
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('main-menu').classList.add('hidden');
+            
+            // Сбрасываем буферы
+            exhibitionsBuffer = [];
+            eventsBuffer = [];
+            receivedExhibitionsChunks = 0;
+            receivedEventsChunks = 0;
+            
+            // Обновляем прогресс
+            document.getElementById('loading-progress').textContent = 'Отправка запроса...';
+            
+            // Отправляем запрос боту
+            tg.sendData(JSON.stringify({
+                action: 'get_museum_data'
+            }));
+            
+            // Устанавливаем таймаут на случай ошибки
+            if (dataTimeout) clearTimeout(dataTimeout);
+            dataTimeout = setTimeout(function() {
+                if (!window.dataComplete) {
+                    showError('Бот не отвечает. Проверьте, запущен ли бот.');
+                }
+            }, 15000);
+        }
+        
+        function refreshData() {
+            // Принудительное обновление данных
+            window.dataComplete = false;
+            requestDataFromBot();
+        }
+        
+        window.dataComplete = false;
+        
+        // Слушаем сообщения от бота
+        tg.onEvent('message', function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (!data.success) {
+                    showError('Ошибка получения данных');
+                    return;
+                }
+                
+                switch(data.type) {
+                    case 'museum_data':
+                        museumData = data.museum;
+                        document.getElementById('museum-name').textContent = `🏛️ ${museumData.name}`;
+                        expectedExhibitionsChunks = data.exhibitions_count ? Math.ceil(data.exhibitions_count / 5) : 0;
+                        expectedEventsChunks = data.events_count ? Math.ceil(data.events_count / 5) : 0;
+                        
+                        console.log(`📊 Ожидаем: ${data.exhibitions_count} выставок, ${data.events_count} мероприятий`);
+                        updateProgress();
+                        break;
+                        
+                    case 'exhibitions_chunk':
+                        exhibitionsBuffer = exhibitionsBuffer.concat(data.data);
+                        receivedExhibitionsChunks++;
+                        console.log(`📥 Получена часть выставок ${data.chunk_index + 1}/${data.total_chunks}`);
+                        updateProgress();
+                        break;
+                        
+                    case 'events_chunk':
+                        eventsBuffer = eventsBuffer.concat(data.data);
+                        receivedEventsChunks++;
+                        console.log(`📥 Получена часть мероприятий ${data.chunk_index + 1}/${data.total_chunks}`);
+                        updateProgress();
+                        break;
+                        
+                    case 'data_complete':
+                        exhibitions = exhibitionsBuffer;
+                        events = eventsBuffer;
+                        filteredExhibitions = exhibitions;
+                        filteredEvents = events;
+                        
+                        window.dataComplete = true;
+                        if (dataTimeout) clearTimeout(dataTimeout);
+                        
+                        // Обновляем время последнего обновления
+                        const now = new Date();
+                        document.getElementById('last-update').textContent = 
+                            `Последнее обновление: ${now.toLocaleTimeString()}`;
+                        
+                        // Скрываем загрузку, показываем меню
+                        document.getElementById('loading').classList.add('hidden');
+                        document.getElementById('main-menu').classList.remove('hidden');
+                        
+                        // Загружаем рекомендуемые события
+                        loadFeaturedEvents();
+                        
+                        console.log('✅ Все данные загружены:', 
+                            exhibitions.length, 'выставок,', 
+                            events.length, 'мероприятий');
+                        
+                        // Если мы находились в каком-то разделе, обновляем его
+                        const currentSection = getCurrentSection();
+                        if (currentSection) {
+                            switch(currentSection) {
+                                case 'exhibitions': loadExhibitions(); break;
+                                case 'events': loadEvents(); break;
+                                case 'museum': loadMuseumInfo(); break;
+                                case 'contacts': loadContacts(); break;
+                            }
+                        }
+                        break;
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга данных:', e);
+            }
+        });
+        
+        function getCurrentSection() {
+            if (!document.getElementById('museum-section').classList.contains('hidden')) return 'museum';
+            if (!document.getElementById('exhibitions-section').classList.contains('hidden')) return 'exhibitions';
+            if (!document.getElementById('events-section').classList.contains('hidden')) return 'events';
+            if (!document.getElementById('contacts-section').classList.contains('hidden')) return 'contacts';
+            return null;
+        }
+        
+        function updateProgress() {
+            const total = expectedExhibitionsChunks + expectedEventsChunks;
+            const received = receivedExhibitionsChunks + receivedEventsChunks;
+            
+            if (total > 0) {
+                const percent = Math.round(received / total * 100);
+                let text = `Загружено: ${percent}%\n`;
+                
+                if (expectedExhibitionsChunks > 0) {
+                    text += `\nВыставки: ${exhibitionsBuffer.length}`;
+                }
+                if (expectedEventsChunks > 0) {
+                    text += `\nМероприятия: ${eventsBuffer.length}`;
+                }
+                
+                document.getElementById('loading-progress').textContent = text;
+            }
+        }
+        
+        function showError(message) {
+            if (dataTimeout) clearTimeout(dataTimeout);
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+        
+        function showMainMenu() {
+            hideAllSections();
+            document.getElementById('main-menu').classList.remove('hidden');
+        }
+        
+        function showSection(section) {
+            hideAllSections();
+            document.getElementById(section + '-section').classList.remove('hidden');
+            
+            switch(section) {
+                case 'museum': loadMuseumInfo(); break;
+                case 'exhibitions': loadExhibitions(); break;
+                case 'events': loadEvents(); break;
+                case 'contacts': loadContacts(); break;
+            }
+        }
+        
+        function hideAllSections() {
+            ['main-menu', 'museum-section', 'exhibitions-section', 'events-section', 'contacts-section']
+                .forEach(id => document.getElementById(id).classList.add('hidden'));
+        }
+        
+        function loadMuseumInfo() {
+            document.getElementById('museum-info').innerHTML = `
+                <div class="card">
+                    <div class="card-title">${museumData.name || 'Музей'}</div>
+                    <div class="card-description">${museumData.description || ''}</div>
+                    <div class="card-meta">📍 ${museumData.address || 'Адрес не указан'}</div>
+                    <div class="card-meta">🕒 ${museumData.workHours || 'Часы работы не указаны'}</div>
+                    <div class="card-meta">📞 ${museumData.phone || 'Телефон не указан'}</div>
+                    <div class="card-meta">💰 ${museumData.priceInfo || 'Цены не указаны'}</div>
+                </div>
+            `;
+        }
+        
+        function filterExhibitions(type) {
+            document.querySelectorAll('#exhibitions-section .filter-button').forEach(btn => 
+                btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            filteredExhibitions = type === 'all' ? exhibitions : 
+                exhibitions.filter(ex => ex.type === type);
+            loadExhibitions();
+        }
+        
+        function loadExhibitions() {
+            if (!filteredExhibitions.length) {
+                document.getElementById('exhibitions-list').innerHTML = 
+                    '<div class="card">Нет выставок в этой категории</div>';
+                return;
+            }
+            
+            let html = '';
+            filteredExhibitions.forEach(ex => {
+                const icon = ex.type === 'permanent' ? '🏛️' : '🖼️';
+                const typeText = ex.type === 'permanent' ? 'Постоянная' : 'Временная';
+                
+                html += `
+                    <div class="card">
+                        <div class="card-title">${icon} ${ex.name}</div>
+                        <span class="badge">${typeText}</span>
+                        <div class="card-description">${ex.description || ''}</div>
+                        ${ex.dates ? `<div class="card-meta">📅 ${ex.dates}</div>` : ''}
+                        ${ex.curator ? `<div class="card-meta">👤 ${ex.curator}</div>` : ''}
+                    </div>
+                `;
+            });
+            document.getElementById('exhibitions-list').innerHTML = html;
+        }
+        
+        function filterEvents(type) {
+            document.querySelectorAll('#events-section .filter-button').forEach(btn => 
+                btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            filteredEvents = type === 'all' ? events : 
+                events.filter(ev => ev.type === type);
+            loadEvents();
+        }
+        
+        function loadEvents() {
+            if (!filteredEvents.length) {
+                document.getElementById('events-list').innerHTML = 
+                    '<div class="card">Нет мероприятий в этой категории</div>';
+                return;
+            }
+            
+            const icons = {'excursion':'🚶','lecture':'📚','masterclass':'🎨','special':'✨','concert':'🎵'};
+            
+            let html = '';
+            filteredEvents.forEach(ev => {
+                const eventDate = ev.date || 'Дата не указана';
+                const eventTime = ev.time || '';
+                const eventPrice = ev.price || 'Цена не указана';
+                const eventLocation = ev.location || 'Место не указано';
+                
+                html += `
+                    <div class="card" onclick="bookEvent('${ev.name.replace(/'/g, "\\'")}')">
+                        <div class="card-title">${icons[ev.type] || '📌'} ${ev.name}</div>
+                        <div class="card-description">${ev.description || ''}</div>
+                        <div class="card-meta">
+                            <span>📅 ${eventDate} ${eventTime}</span>
+                            <span>💰 ${eventPrice}</span>
+                        </div>
+                        <div class="card-meta">📍 ${eventLocation}</div>
+                        ${ev.max_participants ? `
+                            <div class="card-meta">👥 Мест: ${ev.current || 0}/${ev.max_participants}</div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            document.getElementById('events-list').innerHTML = html;
+        }
+        
+        function loadContacts() {
+            document.getElementById('contacts-info').innerHTML = `
+                <div class="card">
+                    <div class="card-title">Контакты</div>
+                    <div class="card-meta">📱 Телефон: ${museumData.phone || 'Не указан'}</div>
+                    <div class="card-meta">📧 Email: ${museumData.email ? `info@${museumData.email}` : 'info@museum.ru'}</div>
+                    <div class="card-meta">📍 Адрес: ${museumData.address || 'Не указан'}</div>
+                    <div class="card-meta">🕒 Часы работы: ${museumData.workHours || 'Не указаны'}</div>
+                </div>
+            `;
+        }
+        
+        function loadFeaturedEvents() {
+            const container = document.getElementById('featured-events');
+            if (!events.length) {
+                container.innerHTML = '<div class="card">Нет мероприятий</div>';
+                return;
+            }
+            
+            let html = '';
+            events.slice(0, 2).forEach(ev => {
+                html += `
+                    <div class="card" onclick="showSection('events')">
+                        <div class="card-title">${ev.name}</div>
+                        <div class="card-meta">📅 ${ev.date || ''}</div>
+                        <div class="card-meta">💰 ${ev.price || ''}</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+        
+        function bookEvent(eventName) {
+            tg.sendData(JSON.stringify({
+                action: 'book_ticket',
+                event: eventName
+            }));
+            tg.showAlert(`✅ Вы выбрали: ${eventName}`);
+        }
+        
+        // Запускаем запрос данных при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            requestDataFromBot();
+            
+            // Настраиваем главную кнопку
+            tg.MainButton.setText('Закрыть');
+            tg.MainButton.onClick(function() {
+                tg.close();
+            });
+            tg.MainButton.show();
+        });
+    </script>
+</body>
+</html>
